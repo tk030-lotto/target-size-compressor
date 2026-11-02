@@ -11,7 +11,8 @@
   // ==========================================================================
   // 1. アルゴリズム・リサイズ設定定数
   // ==========================================================================
-  const MIN_QUALITY = 0.01;
+  const MIN_QUALITY = 0.01; // 絶対下限（探索では使わない。値の妥当性検査用）
+  const QUALITY_FLOOR = 0.40; // 探索の下限。これを下回るなら解像度を下げる (R-05)
   const MAX_QUALITY = 1.00;
   const MAX_SEARCH_ITERATIONS = 8;
 
@@ -94,6 +95,7 @@
   // ==========================================================================
   const CompressorConfig = {
     MIN_QUALITY,
+    QUALITY_FLOOR,
     MAX_QUALITY,
     MAX_SEARCH_ITERATIONS,
     RESIZE_SCALE,

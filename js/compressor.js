@@ -17,6 +17,8 @@ const Config = typeof require !== 'undefined'
   : (typeof root !== 'undefined' && root.CompressorConfig ? root.CompressorConfig : {});
 
 const MIN_QUALITY = Config.MIN_QUALITY !== undefined ? Config.MIN_QUALITY : 0.01;
+// 探索の下限。ここを下回る品質で容量を合わせると文字が潰れるため、先に解像度を下げる (R-05)
+const QUALITY_FLOOR = Config.QUALITY_FLOOR !== undefined ? Config.QUALITY_FLOOR : 0.40;
 const MAX_QUALITY = Config.MAX_QUALITY !== undefined ? Config.MAX_QUALITY : 1.00;
 const MAX_SEARCH_ITERATIONS = Config.MAX_SEARCH_ITERATIONS !== undefined ? Config.MAX_SEARCH_ITERATIONS : 8;
 
@@ -108,10 +110,11 @@ function encodeJpeg(canvas, quality) {
  * @param {number} effectiveTargetBytes 安全マージン適用後の目標バイト数
  * @param {Function} [onProgress] 進捗通知コールバック ({ iteration, quality, currentSize })
  * @param {Function} [encodeFn] テスト用のエンコード差し替え関数（デフォルト: encodeJpeg）
+ * @param {number} [minQuality] 探索の下限品質（既定: QUALITY_FLOOR）。下回る品質は採用しない (R-05)
  * @returns {Promise<{ blob: Blob, quality: number }|null>}
  */
-async function searchBestQuality(canvas, effectiveTargetBytes, onProgress, encodeFn = encodeJpeg) {
-  let minQ = MIN_QUALITY;
+async function searchBestQuality(canvas, effectiveTargetBytes, onProgress, encodeFn = encodeJpeg, minQuality = QUALITY_FLOOR) {
+  let minQ = Math.max(MIN_QUALITY, Math.min(minQuality, MAX_QUALITY));
   let maxQ = MAX_QUALITY;
   let bestBlob = null;
   let bestQuality = null;
@@ -204,7 +207,7 @@ async function compressImage(originalImage, originalFileSize, targetBytes, onPro
       }
     };
 
-    const searchResult = await searchBestQuality(canvas, effectiveTarget, progressWrapper, encodeFn);
+    const searchResult = await searchBestQuality(canvas, effectiveTarget, progressWrapper, encodeFn, QUALITY_FLOOR);
 
     // 4. 目標容量に収まるBlobが得られた場合は成功返却
     if (searchResult) {
@@ -223,7 +226,10 @@ async function compressImage(originalImage, originalFileSize, targetBytes, onPro
     currentHeight = Math.floor(currentHeight * RESIZE_SCALE);
   }
 
-  throw new Error(`最大試行回数（${MAX_RESIZE_ATTEMPTS}回）を超過しました。目標容量を大きく設定してください。`);
+  throw new Error(
+    `目標容量が小さすぎるため、画質の下限（${Math.round(QUALITY_FLOOR * 100)}%）を保ったまま収めることができませんでした。` +
+    '目標容量を増やすか、あらかじめ解像度を下げた画像を指定してください。'
+  );
 }
 
 // ==========================================================================
